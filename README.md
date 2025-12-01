@@ -15,12 +15,6 @@ CarMatchAI is an intelligent recommendation service that helps users find the pe
 - Redis
 - Rule-based engine (custom)
 - ML integration (planned)
-- Telegram Bot API
-
-## 📍 Roadmap 2025
-- ✅ MVP (API + Engine), August
-- ⏳ ML inference, September
-- ⏳ Web UI, October
 
 ## 🚀 Get Started
 1. Clone the repo
@@ -28,8 +22,6 @@ CarMatchAI is an intelligent recommendation service that helps users find the pe
 3. Run with `./gradlew bootRun`
 
 ## 📚 Documentation
-- [User Guide](docs/user-guide.md)
-- [API Reference](docs/api.md)
 
 ## 🤝 Contributing
 PRs welcome! See [CONTRIBUTING.md](CONTRIBUTING.md)

@@ -13,19 +13,19 @@ CarMatchAI is an intelligent recommendation service that helps users find the pe
 - Java + Spring Boot
 - PostgreSQL
 - Redis
+- Docker
 - Rule-based engine (custom)
 - ML integration (planned)
-- Telegram Bot API
 
 ## 📍 Roadmap 2025
-- ✅ MVP (API + Engine), August
-- ⏳ ML inference, September
-- ⏳ Web UI, October
+- ✅ MVP (API + Engine)
+- ⏳ ML inference
+- ⏳ Web UI
 
 ## 🚀 Get Started
 1. Clone the repo
 2. Configure `.env` or `application.yml`
-3. Run with `./gradlew bootRun`
+3. Run with `docker compose up --build`
 
 ## 📚 Documentation
 - [User Guide](docs/user-guide.md)

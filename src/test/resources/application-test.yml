@@ -1,0 +1,46 @@
+spring:
+  application:
+    name: CarMatchAI-Test
+  
+  # Test database configuration (H2 in-memory)
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password: 
+    driver-class-name: org.h2.Driver
+  
+  # JPA configuration for tests
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        format_sql: true
+    defer-datasource-initialization: false
+  
+  # Disable data.sql loading for tests
+  sql:
+    init:
+      mode: never
+  
+  # H2 console for debugging (optional)
+  h2:
+    console:
+      enabled: true
+  
+  # Disable Redis for integration tests (use simple cache)
+  cache:
+    type: simple
+
+# Server configuration
+server:
+  port: 0 # Random port for tests
+
+# Logging configuration
+logging:
+  level:
+    ai.carmatch: DEBUG
+    org.springframework.cache: DEBUG
+    org.hibernate.SQL: WARN

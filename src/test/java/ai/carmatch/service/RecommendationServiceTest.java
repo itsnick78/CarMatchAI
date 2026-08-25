@@ -182,7 +182,8 @@ class RecommendationServiceTest {
         for (RecommendationResult result : results) {
             assertNotNull(result.getModel());
             assertNotNull(result.getReason());
-            assertTrue(result.getScore() >= 0);
+            assertTrue(result.getScore() >= 0 && result.getScore() <= 100,
+                    "Score should stay within the documented 0-100 scale, was " + result.getScore());
             assertNotNull(result.getBrand());
             assertTrue(result.getPrice() > 0);
             assertTrue(result.getYear() > 0);

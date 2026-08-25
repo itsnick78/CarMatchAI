@@ -26,6 +26,14 @@ spring:
     init:
       mode: always
 
+  # Redis configuration
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  cache:
+    type: redis
+
 # Server configuration
 server:
   port: 8081

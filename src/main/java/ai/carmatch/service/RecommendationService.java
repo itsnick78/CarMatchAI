@@ -18,6 +18,17 @@ import java.util.stream.Collectors;
 public class RecommendationService {
     private final CarRepository carRepository;
 
+    /**
+     * Keyed on the preference fields that actually affect the result rather
+     * than the whole UserPreferences entity - JPA entities make fragile cache
+     * keys (lazy fields, mutable identity), and the entity also carries a
+     * back-reference to the owning User that has nothing to do with what's
+     * being recommended.
+     */
+    @Cacheable(cacheNames = "recommendations",
+            key = "T(String).join('|', #userPreferences.budget.toString(), #userPreferences.experience, " +
+                    "#userPreferences.useCase, #userPreferences.brandPreferences?.toString(), " +
+                    "#userPreferences.fuelEconomyPriority.toString())")
     public List<RecommendationResult> getRecommendations(UserPreferences userPreferences) {
         log.info("Generating recommendations: ");
 
@@ -91,7 +102,7 @@ public class RecommendationService {
         score += (1.0 - priceRatio) * 40;
 
         if(userPreferences.getFuelEconomyPriority()) {
-            double fuelScore = Math.max(0, (10.0 - car.getFuelConsumption()) * 10.0 * 30);
+            double fuelScore = Math.max(0, (10.0 - car.getFuelConsumption()) / 10.0 * 30);
             score += fuelScore;
         } else {
             double fuelScore = Math.max(0, (15.0 - car.getFuelConsumption()) / 15.0 * 15);

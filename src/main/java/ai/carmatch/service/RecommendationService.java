@@ -16,76 +16,58 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class RecommendationService {
-    
     private final CarRepository carRepository;
-    
-    /**
-     * Get car recommendations based on user preferences
-     * Results are cached in Redis using the user preferences as the key
-     */
-    @Cacheable(value = "recommendations", key = "#prefs.toString()")
-    public List<RecommendationResult> getRecommendations(UserPreferences prefs) {
-        log.info("Generating recommendations for preferences: {}", prefs);
-        
-        // Get all cars and apply filters
+
+    public List<RecommendationResult> getRecommendations(UserPreferences userPreferences) {
+        log.info("Generating recommendations: ");
+
         List<Car> allCars = carRepository.findAll();
-        List<Car> filteredCars = applyFilters(allCars, prefs);
-        
-        // Calculate scores and generate recommendations
+        List<Car> filteredCars = applyFilters(allCars, userPreferences);
+
         List<RecommendationResult> recommendations = filteredCars.stream()
-                .map(car -> createRecommendationResult(car, prefs))
-                .sorted((r1, r2) -> Double.compare(r2.getScore(), r1.getScore())) // Sort by score descending
-                .limit(5) // Return top 5
+                .map(car -> createRecommendationResult(car, userPreferences))
+                .sorted((r1, r2) -> Double.compare(r2.getScore(), r1.getScore()))
+                .limit(5)
                 .collect(Collectors.toList());
-        
-        log.info("Generated {} recommendations", recommendations.size());
+
+        log.info("Recommendations: {}", recommendations.size());
         return recommendations;
     }
-    
-    /**
-     * Apply filtering rules based on user preferences
-     */
-    private List<Car> applyFilters(List<Car> cars, UserPreferences prefs) {
+
+    private List<Car> applyFilters(List<Car> cars, UserPreferences userPreferences) {
         return cars.stream()
-                .filter(car -> car.getPrice() <= prefs.getBudget()) // Budget filter
+                .filter(car -> car.getPrice() <= userPreferences.getBudget())
                 .filter(car -> {
-                    // Experience filter: novice drivers get limited horsepower
-                    if ("novice".equals(prefs.getExperience())) {
+                    if("novice".equalsIgnoreCase(userPreferences.getExperience())) {
                         return car.getHorsePower() <= 150;
                     }
                     return true;
                 })
                 .filter(car -> {
-                    // Use case filter: city use requires compact cars
-                    if ("city".equals(prefs.getUseCase())) {
+                    if("city".equalsIgnoreCase(userPreferences.getUseCase())) {
                         return car.isCompact();
                     }
                     return true;
                 })
                 .filter(car -> {
-                    // Fuel economy filter
-                    if (prefs.getFuelEconomyPriority()) {
+                    if(userPreferences.getFuelEconomyPriority()) {
                         return car.getFuelConsumption() <= 7.0;
                     }
                     return true;
                 })
                 .filter(car -> {
-                    // Brand preferences filter (if specified)
-                    if (prefs.getBrandPreferences() != null && !prefs.getBrandPreferences().isEmpty()) {
-                        return prefs.getBrandPreferences().contains(car.getBrand());
+                    if(userPreferences.getBrandPreferences() != null && !userPreferences.getBrandPreferences().isEmpty()) {
+                        return userPreferences.getBrandPreferences().contains(car.getBrand());
                     }
                     return true;
                 })
                 .collect(Collectors.toList());
     }
-    
-    /**
-     * Create a recommendation result with score calculation
-     */
-    private RecommendationResult createRecommendationResult(Car car, UserPreferences prefs) {
-        double score = calculateScore(car, prefs);
-        String reason = generateReason(car, prefs);
-        
+
+    private RecommendationResult createRecommendationResult(Car car, UserPreferences userPreferences) {
+        double score = calculateScore(car, userPreferences);
+        String reason = generateReason(car, userPreferences);
+
         return new RecommendationResult(
                 car.getModel(),
                 reason,
@@ -101,75 +83,52 @@ public class RecommendationService {
                 car.getColor()
         );
     }
-    
-    /**
-     * Calculate recommendation score (on a 0–100 scale (0 = worst, 100 = best))
-     * Scoring factors:
-     * - Price efficiency (lower price relative to budget = higher score)
-     * - Fuel economy (lower consumption = higher score)
-     * - Horsepower appropriateness for experience level
-     * - Use case suitability
-     */
-    private double calculateScore(Car car, UserPreferences prefs) {
+
+    private double calculateScore(Car car, UserPreferences userPreferences) {
         double score = 0.0;
-        
-        // Price efficiency score (0-40 points)
-        double priceRatio = car.getPrice() / prefs.getBudget();
+
+        double priceRatio = car.getPrice() / userPreferences.getBudget();
         score += (1.0 - priceRatio) * 40;
-        
-        // Fuel economy score (0-30 points)
-        if (prefs.getFuelEconomyPriority()) {
-            double fuelScore = Math.max(0, (10.0 - car.getFuelConsumption()) / 10.0 * 30);
+
+        if(userPreferences.getFuelEconomyPriority()) {
+            double fuelScore = Math.max(0, (10.0 - car.getFuelConsumption()) * 10.0 * 30);
             score += fuelScore;
         } else {
-            // Still consider fuel economy but with lower weight
             double fuelScore = Math.max(0, (15.0 - car.getFuelConsumption()) / 15.0 * 15);
             score += fuelScore;
         }
-        
-        // Experience appropriateness score (0-20 points)
-        if ("novice".equals(prefs.getExperience())) {
-            if (car.getHorsePower() <= 100) {
+
+        if("novice".equalsIgnoreCase(userPreferences.getExperience())) {
+            if(car.getHorsePower() <= 100) {
                 score += 20;
-            } else if (car.getHorsePower() <= 150) {
+            } else if(car.getHorsePower() <= 150) {
                 score += 10;
             }
-        } else if ("intermediate".equals(prefs.getExperience())) {
-            if (car.getHorsePower() >= 100 && car.getHorsePower() <= 250) {
+        } else {
+            if(car.getHorsePower() >= 200) {
                 score += 20;
-            } else {
-                score += 10;
-            }
-        } else { // expert
-            if (car.getHorsePower() >= 200) {
-                score += 20;
-            } else if (car.getHorsePower() >= 150) {
+            } else if(car.getHorsePower() >= 150) {
                 score += 15;
             } else {
                 score += 5;
             }
         }
-        
-        // Use case suitability score (0-10 points)
-        if ("city".equals(prefs.getUseCase()) && car.isCompact()) {
+
+        if("city".equalsIgnoreCase(userPreferences.getUseCase()) && car.isCompact()) {
             score += 10;
-        } else if ("highway".equals(prefs.getUseCase()) && car.getHorsePower() >= 150) {
+        } else if("highway".equalsIgnoreCase(userPreferences.getUseCase()) && car.getHorsePower() >= 150) {
             score += 10;
-        } else if ("mixed".equals(prefs.getUseCase())) {
-            score += 5; // Neutral score for mixed use
+        } else if("mixed".equalsIgnoreCase(userPreferences.getUseCase())) {
+            score += 5;
         }
-        
-        return Math.max(0, score); // Ensure non-negative score
+
+        return Math.max(0.0, score);
     }
-    
-    /**
-     * Generate human-readable reason for the recommendation
-     */
-    private String generateReason(Car car, UserPreferences prefs) {
+
+    private String generateReason(Car car, UserPreferences userPreferences) {
         List<String> reasons = new ArrayList<>();
-        
-        // Price reason
-        double priceRatio = (car.getPrice() / prefs.getBudget()) * 100;
+
+        double priceRatio = (car.getPrice() / userPreferences.getBudget()) * 100;
         if (priceRatio < 50) {
             reasons.add("excellent value for money");
         } else if (priceRatio < 80) {
@@ -177,37 +136,37 @@ public class RecommendationService {
         } else {
             reasons.add("fits your budget");
         }
-        
+
         // Fuel economy reason
-        if (prefs.getFuelEconomyPriority() && car.getFuelConsumption() <= 6.0) {
+        if (userPreferences.getFuelEconomyPriority() && car.getFuelConsumption() <= 6.0) {
             reasons.add("excellent fuel economy");
         } else if (car.getFuelConsumption() <= 8.0) {
             reasons.add("good fuel efficiency");
         }
-        
+
         // Experience reason
-        if ("novice".equals(prefs.getExperience()) && car.getHorsePower() <= 120) {
+        if ("novice".equals(userPreferences.getExperience()) && car.getHorsePower() <= 120) {
             reasons.add("perfect for new drivers");
-        } else if ("expert".equals(prefs.getExperience()) && car.getHorsePower() >= 200) {
+        } else if ("expert".equals(userPreferences.getExperience()) && car.getHorsePower() >= 200) {
             reasons.add("powerful engine for experienced drivers");
         }
-        
+
         // Use case reason
-        if ("city".equals(prefs.getUseCase()) && car.isCompact()) {
+        if ("city".equals(userPreferences.getUseCase()) && car.isCompact()) {
             reasons.add("compact size ideal for city driving");
-        } else if ("highway".equals(prefs.getUseCase()) && car.getHorsePower() >= 150) {
+        } else if ("highway".equals(userPreferences.getUseCase()) && car.getHorsePower() >= 150) {
             reasons.add("strong performance for highway driving");
         }
-        
+
         // Brand preference reason
-        if (prefs.getBrandPreferences() != null && prefs.getBrandPreferences().contains(car.getBrand())) {
+        if (userPreferences.getBrandPreferences() != null && userPreferences.getBrandPreferences().contains(car.getBrand())) {
             reasons.add("matches your preferred brand");
         }
-        
+
         if (reasons.isEmpty()) {
             reasons.add("meets your basic requirements");
         }
-        
+
         return String.join(", ", reasons);
     }
 }

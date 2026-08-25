@@ -1,21 +1,24 @@
 package ai.carmatch.controller;
 
 import ai.carmatch.dto.UserLoginRequest;
+import ai.carmatch.dto.UserPreferencesUpdateRequest;
 import ai.carmatch.dto.UserProfileResponse;
 import ai.carmatch.dto.UserRegistrationRequest;
-import ai.carmatch.dto.UserPreferencesUpdateRequest;
 import ai.carmatch.model.User;
-import ai.carmatch.service.UserService;
 import ai.carmatch.security.JwtService;
+import ai.carmatch.service.UserService;
+import jakarta.servlet.http.Cookie;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -27,66 +30,56 @@ import java.util.Map;
 @Slf4j
 @CrossOrigin(origins = "*")
 public class UserController {
-    
     private final UserService userService;
-    private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
-    
-    /**
-     * Register a new user
-     * POST /api/users/register
-     */
+    private final AuthenticationManager authenticationManager;
+
     @PostMapping("/register")
-    public ResponseEntity<?> registerUser(@Valid @RequestBody UserRegistrationRequest request) {
+    public ResponseEntity<?> registerUser(@Valid @RequestBody UserRegistrationRequest userRegistrationRequest) {
         try {
-            log.info("Received registration request for username: {}", request.getUsername());
-            
-            UserProfileResponse userProfile = userService.registerUser(request);
-            
+            log.info("Received registration request for username: {}", userRegistrationRequest.getUsername());
+
+            UserProfileResponse userProfileResponse = userService.registerUser(userRegistrationRequest);
             Map<String, Object> response = new HashMap<>();
             response.put("message", "User registered successfully");
-            response.put("user", userProfile);
-            
+            response.put("user", userProfileResponse);
+
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
-            
         } catch (IllegalArgumentException e) {
             log.warn("Registration failed: {}", e.getMessage());
             Map<String, String> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
-            
+            error.put("message", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
         } catch (Exception e) {
             log.error("Error during user registration", e);
             Map<String, String> error = new HashMap<>();
-            error.put("error", "Registration failed. Please try again.");
+            error.put("message", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
         }
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?> login(@Valid @RequestBody UserLoginRequest request) {
+    public ResponseEntity<?> login(@Valid @RequestBody UserLoginRequest userLoginRequest) {
         try {
-            log.info("Login attempt for email: {}", request.getEmail());
+            log.info("Login attempt for email: {}", userLoginRequest.getEmail());
 
-            // Load user by email, but Spring Security authenticates by username
-            User user = userService.findByEmail(request.getEmail())
-                    .orElseThrow(() -> new IllegalArgumentException("Invalid credentials"));
+            User user = userService.findByEmail(userLoginRequest.getEmail())
+                    .orElseThrow(() -> new UsernameNotFoundException(userLoginRequest.getEmail()));
 
             UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                    user.getUsername(), request.getPassword());
+                    user.getUsername(), userLoginRequest.getPassword());
             authenticationManager.authenticate(authToken);
 
             UserDetails userDetails = userService.loadUserByUsername(user.getUsername());
             String jwt = jwtService.generateToken(userDetails);
-
-            jakarta.servlet.http.Cookie cookie = new jakarta.servlet.http.Cookie("AUTH_TOKEN", jwt);
+            Cookie cookie = new Cookie("AUTH_TOKEN", jwt);
             cookie.setHttpOnly(true);
             cookie.setPath("/");
             cookie.setMaxAge(jwtService.getExpirationSeconds());
-            // For dev over HTTP you may want this false; set to true when using HTTPS
+            // TODO : Set to true when using HTTPS
             cookie.setSecure(false);
 
-            org.springframework.http.ResponseCookie responseCookie = org.springframework.http.ResponseCookie
+            ResponseCookie responseCookie = ResponseCookie
                     .from("AUTH_TOKEN", jwt)
                     .httpOnly(true)
                     .secure(false)
@@ -98,7 +91,7 @@ public class UserController {
             Map<String, Object> response = new HashMap<>();
             response.put("message", "Login successful");
 
-            return ResponseEntity.ok()
+            return ResponseEntity.status(HttpStatus.OK)
                     .header("Set-Cookie", responseCookie.toString())
                     .body(response);
         } catch (IllegalArgumentException e) {
@@ -108,110 +101,85 @@ public class UserController {
         } catch (Exception e) {
             log.error("Error during login", e);
             Map<String, String> error = new HashMap<>();
-            error.put("error", "Login failed");
+            error.put("error", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
         }
     }
-    
-    /**
-     * Get current user profile
-     * GET /api/users/profile
-     */
+
     @GetMapping("/profile")
-    public ResponseEntity<?> getCurrentUserProfile(Authentication authentication) {
+    public ResponseEntity<?> getCurrentUserProfile(Authentication auth) {
         try {
-            String username = authentication.getName();
-            log.info("Getting profile for user: {}", username);
-            
+            String username = auth.getName();
+            log.info("Retrieving user profile for username: {}", username);
             UserProfileResponse profile = userService.getUserProfile(username);
-            return ResponseEntity.ok(profile);
-            
+            return ResponseEntity.status(HttpStatus.OK).body(profile);
         } catch (IllegalArgumentException e) {
             log.warn("Profile not found: {}", e.getMessage());
             Map<String, String> error = new HashMap<>();
             error.put("error", e.getMessage());
-            return ResponseEntity.notFound().build();
-            
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
         } catch (Exception e) {
-            log.error("Error getting user profile", e);
+            log.error("Error during user profile", e);
             Map<String, String> error = new HashMap<>();
-            error.put("error", "Failed to retrieve profile");
+            error.put("error", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
         }
     }
-    
-    /**
-     * Get user preferences
-     * GET /api/users/preferences
-     */
+
     @GetMapping("/preferences")
-    public ResponseEntity<?> getUserPreferences(Authentication authentication) {
+    public ResponseEntity<?> getUserPreferences(Authentication auth) {
         try {
-            String username = authentication.getName();
-            log.info("Getting preferences for user: {}", username);
-            
+            String username = auth.getName();
+            log.info("Retrieving user preferences for username: {}", username);
+
             UserProfileResponse profile = userService.getUserProfile(username);
-            
+
             if (profile.getPreferences() == null) {
                 Map<String, String> error = new HashMap<>();
-                error.put("error", "No preferences found. Please set your preferences first.");
-                return ResponseEntity.badRequest().body(error);
+                error.put("error", "No preferences found for username: {}" + username);
+                return ResponseEntity.status(HttpStatus.NO_CONTENT).body(error);
             }
-            
-            return ResponseEntity.ok(profile.getPreferences());
-            
+            return ResponseEntity.status(HttpStatus.OK).body(profile.getPreferences());
         } catch (IllegalArgumentException e) {
             log.warn("Preferences not found: {}", e.getMessage());
             Map<String, String> error = new HashMap<>();
             error.put("error", e.getMessage());
-            return ResponseEntity.notFound().build();
-            
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
         } catch (Exception e) {
-            log.error("Error getting user preferences", e);
+            log.error("Error during user preferences", e);
             Map<String, String> error = new HashMap<>();
-            error.put("error", "Failed to retrieve preferences");
+            error.put("error", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
         }
     }
-    
-    /**
-     * Create user preferences
-     * POST /api/users/preferences
-     */
+
     @PostMapping("/preferences")
     public ResponseEntity<?> createUserPreferences(
             @Valid @RequestBody UserPreferencesUpdateRequest request,
-            Authentication authentication) {
+            Authentication auth) {
         try {
-            String username = authentication.getName();
-            log.info("Creating preferences for user: {}", username);
-            
+            String username = auth.getName();
+            log.info("Creating user preferences for username: {}", username);
             UserProfileResponse profile = userService.updateUserPreferences(username, request);
-            
+
             Map<String, Object> response = new HashMap<>();
             response.put("message", "Preferences created successfully");
             response.put("preferences", profile.getPreferences());
-            
+
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
-            
         } catch (IllegalArgumentException e) {
             log.warn("Preferences creation failed: {}", e.getMessage());
             Map<String, String> error = new HashMap<>();
             error.put("error", e.getMessage());
-            return ResponseEntity.badRequest().body(error);
-            
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
         } catch (Exception e) {
-            log.error("Error creating user preferences", e);
+            log.error("Error during creating user preferences", e);
             Map<String, String> error = new HashMap<>();
-            error.put("error", "Failed to create preferences");
+            error.put("error", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
         }
     }
-    
-    /**
-     * Update user preferences
-     * PUT /api/users/preferences
-     */
+
     @PutMapping("/preferences")
     public ResponseEntity<?> updateUserPreferences(
             @Valid @RequestBody UserPreferencesUpdateRequest request,
@@ -219,21 +187,21 @@ public class UserController {
         try {
             String username = authentication.getName();
             log.info("Updating preferences for user: {}", username);
-            
+
             UserProfileResponse profile = userService.updateUserPreferences(username, request);
-            
+
             Map<String, Object> response = new HashMap<>();
             response.put("message", "Preferences updated successfully");
             response.put("user", profile);
-            
+
             return ResponseEntity.ok(response);
-            
+
         } catch (IllegalArgumentException e) {
             log.warn("Preferences update failed: {}", e.getMessage());
             Map<String, String> error = new HashMap<>();
             error.put("error", e.getMessage());
             return ResponseEntity.badRequest().body(error);
-            
+
         } catch (Exception e) {
             log.error("Error updating user preferences", e);
             Map<String, String> error = new HashMap<>();
@@ -241,11 +209,7 @@ public class UserController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
         }
     }
-    
-    /**
-     * Update user basic profile information
-     * PUT /api/users/profile
-     */
+
     @PutMapping("/profile")
     public ResponseEntity<?> updateUserProfile(
             @RequestParam(required = false) String firstName,
@@ -255,21 +219,21 @@ public class UserController {
         try {
             String username = authentication.getName();
             log.info("Updating profile for user: {}", username);
-            
+
             UserProfileResponse profile = userService.updateUserProfile(username, firstName, lastName, email);
-            
+
             Map<String, Object> response = new HashMap<>();
             response.put("message", "Profile updated successfully");
             response.put("user", profile);
-            
+
             return ResponseEntity.ok(response);
-            
+
         } catch (IllegalArgumentException e) {
             log.warn("Profile update failed: {}", e.getMessage());
             Map<String, String> error = new HashMap<>();
             error.put("error", e.getMessage());
             return ResponseEntity.badRequest().body(error);
-            
+
         } catch (Exception e) {
             log.error("Error updating user profile", e);
             Map<String, String> error = new HashMap<>();
@@ -277,30 +241,26 @@ public class UserController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
         }
     }
-    
-    /**
-     * Delete user account
-     * DELETE /api/users/account
-     */
+
     @DeleteMapping("/account")
     public ResponseEntity<?> deleteUserAccount(Authentication authentication) {
         try {
             String username = authentication.getName();
             log.info("Deleting account for user: {}", username);
-            
+
             userService.deleteUser(username);
-            
+
             Map<String, String> response = new HashMap<>();
             response.put("message", "Account deleted successfully");
-            
+
             return ResponseEntity.ok(response);
-            
+
         } catch (IllegalArgumentException e) {
             log.warn("Account deletion failed: {}", e.getMessage());
             Map<String, String> error = new HashMap<>();
             error.put("error", e.getMessage());
             return ResponseEntity.notFound().build();
-            
+
         } catch (Exception e) {
             log.error("Error deleting user account", e);
             Map<String, String> error = new HashMap<>();
@@ -308,22 +268,18 @@ public class UserController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
         }
     }
-    
-    /**
-     * Check if username is available
-     * GET /api/users/check-username?username={username}
-     */
+
     @GetMapping("/check-username")
     public ResponseEntity<?> checkUsernameAvailability(@RequestParam String username) {
         try {
             boolean available = !userService.userExists(username);
-            
+
             Map<String, Object> response = new HashMap<>();
             response.put("username", username);
             response.put("available", available);
-            
+
             return ResponseEntity.ok(response);
-            
+
         } catch (Exception e) {
             log.error("Error checking username availability", e);
             Map<String, String> error = new HashMap<>();

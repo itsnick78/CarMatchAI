@@ -1,6 +1,8 @@
 package ai.carmatch.controller;
 
 import ai.carmatch.dto.RecommendationResult;
+import ai.carmatch.dto.UserProfileResponse;
+import ai.carmatch.model.User;
 import ai.carmatch.model.UserPreferences;
 import ai.carmatch.service.RecommendationService;
 import ai.carmatch.service.UserService;
@@ -8,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -35,7 +38,7 @@ public class RecommendationController {
             log.info("Getting recommendations for user's saved preferences: {}", username);
             
             // Get user's preferences
-            var userProfile = userService.getUserProfile(username);
+            UserProfileResponse userProfile = userService.getUserProfile(username);
             UserPreferences preferences = userProfile.getPreferences();
             
             if (preferences == null) {
@@ -54,12 +57,10 @@ public class RecommendationController {
             log.info("Returning {} recommendations for user: {}", recommendations.size(), username);
             return ResponseEntity.ok(recommendations);
             
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException | UsernameNotFoundException e) {
             log.warn("User not found: {}", e.getMessage());
-            Map<String, String> error = new HashMap<>();
-            error.put("error", e.getMessage());
             return ResponseEntity.notFound().build();
-            
+
         } catch (Exception e) {
             log.error("Error generating recommendations from user preferences", e);
             Map<String, String> error = new HashMap<>();

@@ -1,7 +1,9 @@
 package ai.carmatch.controller;
 
+import ai.carmatch.dto.CarUpdateRequest;
 import ai.carmatch.model.Car;
 import ai.carmatch.repository.CarRepository;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -34,11 +36,11 @@ public class CarController {
     @PostMapping("/create")
     public ResponseEntity<Car> createCar(@RequestBody Car car) {
         Car saved = carRepository.save(car);
-        return ResponseEntity.created(URI.create("/api/cars/create/" + saved.getId())).body(saved);
+        return ResponseEntity.status(HttpStatus.CREATED).body(saved);
     }
 
     @PutMapping("/edit/{id}")
-    public ResponseEntity<Car> updateCar(@PathVariable Long id, @RequestBody Car update) {
+    public ResponseEntity<Car> updateCar(@PathVariable Long id, @RequestBody CarUpdateRequest update) {
         return carRepository.findById(id)
                 .map(existing -> {
                     existing.setBrand(update.getBrand());

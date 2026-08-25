@@ -1,9 +1,22 @@
 services:
   postgres:
     image: 'postgres:latest'
+    container_name: carmatch-postgres
     environment:
-      - 'POSTGRES_DB=mydatabase'
+      - 'POSTGRES_DB=carmatch'
       - 'POSTGRES_PASSWORD=secret'
-      - 'POSTGRES_USER=myuser'
+      - 'POSTGRES_USER=carmatch_user'
+      - 'TZ=UTC'
+      - 'PGTZ=UTC'
     ports:
-      - '5432'
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U carmatch_user -d carmatch"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

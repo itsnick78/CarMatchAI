@@ -34,6 +34,23 @@ spring:
   cache:
     type: redis
 
+  # Spring AI / Ollama configuration
+  ai:
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      chat:
+        model: ${OLLAMA_MODEL:llama3.2}
+        options:
+          temperature: 0.2
+
+# CarMatchAI-specific feature flags
+carmatch:
+  ai:
+    # AI-generated recommendation explanations degrade to the template-based
+    # ones in RecommendationService whenever this is off or Ollama is
+    # unreachable/slow - see AiExplanationService.
+    explanations-enabled: ${AI_EXPLANATIONS_ENABLED:true}
+
 # Server configuration
 server:
   port: 8081

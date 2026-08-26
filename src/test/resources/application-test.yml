@@ -34,6 +34,14 @@ spring:
   cache:
     type: simple
 
+# Tests never depend on a running Ollama instance: AiExplanationService checks
+# this flag and short-circuits before calling the model, so recommendations
+# fall back to the deterministic template reason. PreferenceExtractionService
+# has no such flag - tests that exercise it mock the ChatClient bean directly.
+carmatch:
+  ai:
+    explanations-enabled: false
+
 # Server configuration
 server:
   port: 0 # Random port for tests

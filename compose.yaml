@@ -31,6 +31,31 @@ services:
       timeout: 5s
       retries: 5
 
+  ollama:
+    image: 'ollama/ollama:latest'
+    container_name: carmatch-ollama
+    ports:
+      - '11434:11434'
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # One-shot job: pulls the chat model into the ollama_data volume on first
+  # startup, then exits. Without this, the app's first AI request would fail
+  # because no model has been downloaded into the fresh Ollama container yet.
+  ollama-pull:
+    image: 'ollama/ollama:latest'
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: ["sh", "-c", "OLLAMA_HOST=ollama:11434 ollama pull llama3.2"]
+    restart: "no"
+
 volumes:
   postgres_data:
   redis_data:
+  ollama_data:

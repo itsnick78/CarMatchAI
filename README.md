@@ -1,11 +1,13 @@
 # CarMatchAI
 
-CarMatchAI is an intelligent recommendation service that helps users find the perfect car based on preferences, budget, and lifestyle using a rule-based engine with Redis caching.
+CarMatchAI is an intelligent recommendation service that helps users find the perfect car based on preferences, budget, and lifestyle. A deterministic rule-based engine does the actual filtering and scoring; Spring AI (backed by a local Ollama model) sits on top of it to accept preferences typed in plain language and to phrase the recommendation explanations naturally - it never decides which cars match.
 
 ## 🌟 Features
 
 - **Rule-based recommendation engine** with intelligent filtering and scoring
 - **Redis caching** for improved performance and response times
+- **Natural-language preference intake** - describe what you want in a sentence instead of filling a form; Spring AI extracts structured preferences from it
+- **AI-generated recommendation explanations** with a deterministic template fallback when the model is unavailable
 - **PostgreSQL database** with 30+ sample car records
 - **RESTful API** with comprehensive validation
 - **Multi-criteria filtering** based on budget, experience, use case, brand preferences, and fuel economy
@@ -16,6 +18,7 @@ CarMatchAI is an intelligent recommendation service that helps users find the pe
 - **Java 17** + **Spring Boot 3.x**
 - **PostgreSQL** - Primary database
 - **Redis** - Caching layer
+- **Spring AI** + **Ollama** - Natural-language preference parsing and recommendation explanations
 - **Maven** - Build tool
 - **Docker Compose** - Container orchestration
 - **JUnit 5** + **MockMvc** - Testing framework
@@ -77,6 +80,18 @@ Cookie: AUTH_TOKEN=<token>
 }
 ```
 
+#### Set Preferences from Free Text
+```http
+POST /api/users/preferences/from-text
+Content-Type: application/json
+Cookie: AUTH_TOKEN=<token>
+
+{ "text": "нужна недорогая экономичная машина для города, до 30000" }
+```
+Spring AI extracts a `budget`/`experience`/`useCase`/`brandPreferences`/`fuelEconomyPriority`
+object from the text, validates it with the same rules as the manual form, and
+saves it exactly like `POST /api/users/preferences` would.
+
 #### Get Car Recommendations
 ```http
 GET /api/recommend
@@ -135,6 +150,58 @@ The recommendation score (0-100) is calculated based on:
 - **Experience appropriateness** (20 points): Horsepower matching experience level
 - **Use case suitability** (10 points): Car characteristics matching use case
 
+### AI Integration (Spring AI + Ollama)
+
+Two features use an LLM; neither one touches which cars get recommended or
+their score - that stays entirely in `RecommendationService`'s deterministic
+rule engine, so recommendations are reproducible and cheap to cache/test.
+
+**1. Natural-language preference intake** (`PreferenceExtractionService`)
+turns free text into the same `UserPreferencesUpdateRequest` the manual form
+produces, via Spring AI's structured-output support
+(`chatClient.prompt().call().entity(UserPreferencesUpdateRequest.class)`).
+Spring AI generates a JSON schema from that DTO, appends it to the prompt as
+a format instruction, and parses the model's JSON reply back into the DTO.
+Because the extraction target is the *existing* request DTO - not a
+separate AI-only model - the LLM's output is checked with the exact same
+`@NotNull`/`@Pattern`/`@Min`/`@Max` Bean Validation rules a hand-filled form
+would be, and both paths call the same `UserService.updateUserPreferences`.
+There is only one code path that ever writes preferences to the database.
+
+**2. AI-generated recommendation explanations** (`AiExplanationService`)
+rewrites the `reason` text on the already-scored, already-sorted top-5
+results. It sends the model only the facts already computed for each car
+(brand, price, fuel consumption, horsepower, score) plus the buyer's
+preferences, and asks it to phrase one sentence per car - it is explicitly
+told not to invent specs. One batched call covers the whole list instead of
+one call per car. If Ollama is unreachable, slow, disabled, or returns a
+malformed/mis-sized response, the service catches it, logs a warning, and
+returns `null`; `RecommendationService` then keeps the deterministic
+template reason it always computes first. The feature is additive and never
+load-bearing - `/api/recommend` works identically with Ollama stopped.
+Because reasons are baked into the `RecommendationResult` before it's
+cached, a cache hit never re-invokes the model either.
+
+**Why Ollama** instead of a hosted API: no API key to manage, rotate, or
+accidentally leak from a portfolio project; runs locally in the same
+`docker-compose` stack as Postgres/Redis for a fully reproducible dev setup
+with zero billing risk. Spring AI's `ChatClient` abstracts the model
+provider, so swapping in OpenAI/Anthropic/etc. later is a dependency and
+config change, not a code rewrite.
+
+**Why the flag** - `carmatch.ai.explanations-enabled` (`AI_EXPLANATIONS_ENABLED`
+env var, defaults to `true`, forced to `false` under the `test` profile):
+tests must not depend on a running Ollama instance or on non-deterministic
+model output. `AiExplanationService` checks the flag before ever touching
+`ChatClient`, so the full test suite runs without Ollama installed.
+`PreferenceExtractionService` has no such flag since it's only exercised
+behind an explicit user action; its tests mock the `ChatClient` bean
+directly instead.
+
+**Running it**: `docker compose up -d` also starts an `ollama` container and
+a one-shot `ollama-pull` job that downloads the `llama3.2` model into a
+named volume on first run (so it's not re-downloaded on every restart).
+
 ### Testing
 
 **Run the complete test suite:**
@@ -182,7 +249,9 @@ src/
 The `docker-compose.yml` includes:
 - **PostgreSQL 16**: Database with persistent volumes
 - **Redis 7**: Cache server with persistent volumes
-- **Health checks** for both services
+- **Ollama**: Local LLM server for the Spring AI features, plus a one-shot
+  `ollama-pull` job that downloads the chat model on first startup
+- **Health checks** for all services
 - **Exposed ports** for local development
 
 ### Sample Data

@@ -1,11 +1,13 @@
 package ai.carmatch.controller;
 
+import ai.carmatch.dto.NaturalLanguagePreferencesRequest;
 import ai.carmatch.dto.UserLoginRequest;
 import ai.carmatch.dto.UserPreferencesUpdateRequest;
 import ai.carmatch.dto.UserProfileResponse;
 import ai.carmatch.dto.UserRegistrationRequest;
 import ai.carmatch.model.User;
 import ai.carmatch.security.JwtService;
+import ai.carmatch.service.PreferenceExtractionService;
 import ai.carmatch.service.UserService;
 import jakarta.servlet.http.Cookie;
 import jakarta.validation.Valid;
@@ -33,6 +35,7 @@ public class UserController {
     private final UserService userService;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
+    private final PreferenceExtractionService preferenceExtractionService;
 
     @PostMapping("/register")
     public ResponseEntity<?> registerUser(@Valid @RequestBody UserRegistrationRequest userRegistrationRequest) {
@@ -176,6 +179,35 @@ public class UserController {
             log.error("Error during creating user preferences", e);
             Map<String, String> error = new HashMap<>();
             error.put("error", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        }
+    }
+
+    @PostMapping("/preferences/from-text")
+    public ResponseEntity<?> createPreferencesFromText(
+            @Valid @RequestBody NaturalLanguagePreferencesRequest request,
+            Authentication auth) {
+        try {
+            String username = auth.getName();
+            log.info("Extracting preferences from free text for username: {}", username);
+
+            UserPreferencesUpdateRequest extracted = preferenceExtractionService.extract(request.getText());
+            UserProfileResponse profile = userService.updateUserPreferences(username, extracted);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "Preferences extracted and saved successfully");
+            response.put("preferences", profile.getPreferences());
+
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (IllegalArgumentException e) {
+            log.warn("Preference extraction failed: {}", e.getMessage());
+            Map<String, String> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+        } catch (Exception e) {
+            log.error("Error extracting preferences from text", e);
+            Map<String, String> error = new HashMap<>();
+            error.put("error", "Failed to extract preferences from the provided text");
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
         }
     }

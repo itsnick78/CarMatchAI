@@ -17,6 +17,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class RecommendationService {
     private final CarRepository carRepository;
+    private final AiExplanationService aiExplanationService;
 
     /**
      * Keyed on the preference fields that actually affect the result rather
@@ -40,6 +41,16 @@ public class RecommendationService {
                 .sorted((r1, r2) -> Double.compare(r2.getScore(), r1.getScore()))
                 .limit(5)
                 .collect(Collectors.toList());
+
+        // Each result already carries a deterministic template reason (see
+        // generateReason below); this only replaces the *wording* when the LLM
+        // is available; which cars were picked and their scores never change.
+        List<String> aiReasons = aiExplanationService.explain(recommendations, userPreferences);
+        if (aiReasons != null && aiReasons.size() == recommendations.size()) {
+            for (int i = 0; i < recommendations.size(); i++) {
+                recommendations.get(i).setReason(aiReasons.get(i));
+            }
+        }
 
         log.info("Recommendations: {}", recommendations.size());
         return recommendations;

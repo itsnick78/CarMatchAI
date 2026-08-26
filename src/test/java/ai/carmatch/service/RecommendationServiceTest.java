@@ -23,6 +23,9 @@ class RecommendationServiceTest {
     @Mock
     private CarRepository carRepository;
 
+    @Mock
+    private AiExplanationService aiExplanationService;
+
     @InjectMocks
     private RecommendationService recommendationService;
 

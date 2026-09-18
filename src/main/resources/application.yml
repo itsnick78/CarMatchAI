@@ -39,9 +39,10 @@ spring:
     ollama:
       base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
       chat:
-        model: ${OLLAMA_MODEL:llama3.2}
+        model: ${OLLAMA_MODEL:llama3.2:1b}
         options:
           temperature: 0.2
+          num-predict: 400
 
 # CarMatchAI-specific feature flags
 carmatch:
@@ -67,11 +68,23 @@ logging:
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
 
-# JWT configuration
+# App security configuration
 app:
   jwt:
-    secret: "anfisa"
+    # Override with a real secret via the JWT_SECRET env var outside local
+    # dev - never rely on the fallback below in a deployed environment,
+    # since anyone who reads this file could otherwise forge tokens.
+    secret: ${JWT_SECRET:flG8cyEcArt9e7xDN6XPWYNRSCZSKT8M9ytxpYr+4jSpPp6LkfIYFWUChcrHpWTj}
     expirationMs: 3600000 # 1 hour
+  cors:
+    # Comma-separated allowed origin patterns for the CORS filter. No "*"
+    # here on purpose - combined with allowCredentials(true) (needed for the
+    # AUTH_TOKEN cookie) a wildcard would let any site read authenticated
+    # responses. Override via CORS_ALLOWED_ORIGINS for real deployments.
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:*,http://127.0.0.1:*}
+  cookie:
+    # Must be true once the app is served over HTTPS.
+    secure: ${COOKIE_SECURE:false}
 
 # Management endpoints
 management:

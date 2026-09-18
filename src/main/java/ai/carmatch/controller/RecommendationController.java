@@ -21,7 +21,6 @@ import java.util.Map;
 @RequestMapping("/api")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = "*") // Allow CORS for frontend integration
 public class RecommendationController {
     
     private final RecommendationService recommendationService;

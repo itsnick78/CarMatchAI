@@ -56,7 +56,13 @@ public class User implements UserDetails {
     
     @Column(name = "is_enabled")
     private Boolean enabled = true;
-    
+
+    // Nullable at the DB level on purpose: ddl-auto=update won't backfill a
+    // NOT NULL default onto existing rows, so getAuthorities() below treats a
+    // null/blank value as "USER" rather than relying on the column default.
+    @Column(name = "role", length = 20)
+    private String role = "USER";
+
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @EqualsAndHashCode.Exclude
     private UserPreferences preferences;
@@ -75,7 +81,8 @@ public class User implements UserDetails {
     // UserDetails implementation for Spring Security
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return Collections.singletonList(new SimpleGrantedAuthority("ROLE_USER"));
+        String effectiveRole = (role == null || role.isBlank()) ? "USER" : role;
+        return Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + effectiveRole));
     }
     
     @Override

@@ -9,10 +9,10 @@ import ai.carmatch.model.User;
 import ai.carmatch.security.JwtService;
 import ai.carmatch.service.PreferenceExtractionService;
 import ai.carmatch.service.UserService;
-import jakarta.servlet.http.Cookie;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
@@ -30,12 +30,14 @@ import java.util.Map;
 @RequestMapping("/api/users")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = "*")
 public class UserController {
     private final UserService userService;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
     private final PreferenceExtractionService preferenceExtractionService;
+
+    @Value("${app.cookie.secure}")
+    private boolean cookieSecure;
 
     @PostMapping("/register")
     public ResponseEntity<?> registerUser(@Valid @RequestBody UserRegistrationRequest userRegistrationRequest) {
@@ -75,17 +77,11 @@ public class UserController {
 
             UserDetails userDetails = userService.loadUserByUsername(user.getUsername());
             String jwt = jwtService.generateToken(userDetails);
-            Cookie cookie = new Cookie("AUTH_TOKEN", jwt);
-            cookie.setHttpOnly(true);
-            cookie.setPath("/");
-            cookie.setMaxAge(jwtService.getExpirationSeconds());
-            // TODO : Set to true when using HTTPS
-            cookie.setSecure(false);
 
             ResponseCookie responseCookie = ResponseCookie
                     .from("AUTH_TOKEN", jwt)
                     .httpOnly(true)
-                    .secure(false)
+                    .secure(cookieSecure)
                     .path("/")
                     .maxAge(jwtService.getExpirationSeconds())
                     .sameSite("Lax")

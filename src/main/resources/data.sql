@@ -1,7 +1,9 @@
 -- Sample car data for CarMatchAI
 -- This data will be loaded at application startup
 
-INSERT INTO cars 
+DELETE FROM cars;
+
+INSERT INTO cars
 (brand, model, car_year, price, horse_power, fuel_consumption, fuel_type, is_compact, drivetrain_type, color) VALUES
 -- Compact cars for city driving
 ('Toyota', 'Corolla', 2023, 25000.00, 139, 5.8, 'Gasoline', true, 'FWD', 'White'),

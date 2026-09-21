@@ -52,7 +52,7 @@ services:
     depends_on:
       ollama:
         condition: service_healthy
-    entrypoint: ["sh", "-c", "OLLAMA_HOST=ollama:11434 ollama pull llama3.2"]
+    entrypoint: ["sh", "-c", "OLLAMA_HOST=ollama:11434 ollama pull llama3.2:1b"]
     restart: "no"
 
 volumes:

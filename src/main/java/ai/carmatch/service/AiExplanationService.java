@@ -79,10 +79,20 @@ public class AiExplanationService {
                 return null;
             }
 
+            if (response.reasons().stream().anyMatch(AiExplanationService::looksLikeJson)) {
+                log.warn("AI explanation reason looked like raw JSON instead of prose, keeping template reasons");
+                return null;
+            }
+
             return response.reasons();
         } catch (Exception e) {
             log.warn("AI explanation generation failed ({}), keeping template reasons", e.getMessage());
             return null;
         }
+    }
+
+    private static boolean looksLikeJson(String reason) {
+        String trimmed = reason == null ? "" : reason.strip();
+        return trimmed.startsWith("{") || trimmed.startsWith("[");
     }
 }
